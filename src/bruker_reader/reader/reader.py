@@ -4,6 +4,7 @@ from struct import Struct
 from collections import namedtuple
 import numpy as np
 import pandas as pd
+from typing import Generator
 
 # This reader is heavily inspired (well, essentially cribbed from) the work
 # done in the 'rtms' R package:
@@ -181,24 +182,24 @@ class BAFReader:
         self._read_spectrum_hdr()
         self._read_peak_hdr()
 
-    def mass2index(self, mass: float):
+    def mass2index(self, mass: float) -> np.ndarray:
         c = self.calibration
         scaled = c.freq_hi / (mass - c.alpha / c.freq_hi)
         return c.size * (c.freq_wid - scaled) / c.freq_wid
 
-    def index2mass(self, idx: int | np.ndarray):
+    def index2mass(self, idx: int | np.ndarray) -> np.ndarray:
         c = self.calibration
         scaled = c.freq_wid * (c.size - idx) / c.size - c.beta
         return c.freq_hi / scaled + c.alpha / c.freq_hi
 
-    def _read_spectrum_hdr(self):
+    def _read_spectrum_hdr(self) -> None:
         with open(self.dat_file, 'rb') as f:
             f.seek(self.offsets["spectrum"])
             hdr = SpecHdr.read(f)
             self.spec_length = (hdr.blksz - hdr.hdrsz) // 4
             self.spec_start = self.offsets["spectrum"] + hdr.hdrsz
 
-    def _read_peak_hdr(self):
+    def _read_peak_hdr(self) -> None:
         with open(self.dat_file, 'rb') as f:
             f.seek(self.offsets["maxima"])
             hdr = PeakHdr.read(f)
@@ -239,7 +240,7 @@ class BAFReader:
             mass = self.index2mass(np.arange(start_idx, end_idx))
             return pd.DataFrame({"mz": mass, "intensity": intensity})
 
-    def read_peaks(self):
+    def read_peaks(self) -> pd.DataFrame:
         """Read all maxima from the spectrum.
         Returns a Pandas DataFrame of the m/z and intensity of all recorded
         peaks. These are the peaks recorded by the instrument for calibration,
@@ -255,7 +256,7 @@ class BAFReader:
                                     count=self.num_peaks,
                                     dtype='<d'
                                     )
-            
+
             mass = self.index2mass(indices)
             return pd.DataFrame({"mz": mass, "intensity": intensity})
 
@@ -276,24 +277,32 @@ class BAFCache:
     def __init__(self, root_dir: str):
         self.root_dir = root_dir
         baf_files = glob("*.d", root_dir=root_dir)
-        self.sample_lookup = {os.path.splitext(f)[0]:
-                              os.path.join(root_dir, f)
-                              for f in baf_files}
-        self.samples = list(self.sample_lookup.keys())
+        self._sample_lookup = {os.path.splitext(f)[0]:
+                               os.path.join(root_dir, f)
+                               for f in baf_files}
+        self._samples = list(self._sample_lookup.keys())
         self.cache = {}
 
     def __getitem__(self, key: str | int) -> BAFReader:
         if isinstance(key, int):
-            key = self.samples[key]
+            key = self._samples[key]
         if key in self.cache:
             return self.cache[key]
-        rdr = BAFReader(self.sample_lookup[key])
+        rdr = BAFReader(self._sample_lookup[key])
         self.cache[key] = rdr
         return rdr
 
     def __contains__(self, key: str) -> bool:
-        return key in self.sample_lookup
+        return key in self._sample_lookup
 
-    def __iter__(self):
-        for samp in self.samples:
+    def __iter__(self) -> Generator[BAFReader]:
+        for samp in self._samples:
             yield self[samp]
+
+    @property
+    def samples(self) -> list[str]:
+        return self._samples[:]
+
+    @property
+    def files(self) -> dict[str, str]:
+        return self._sample_lookup.copy()
