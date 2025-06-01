@@ -295,7 +295,7 @@ class BAFCache:
     def __contains__(self, key: str) -> bool:
         return key in self._sample_lookup
 
-    def __iter__(self) -> Generator[BAFReader]:
+    def __iter__(self) -> Generator[BAFReader, None, None]:
         for samp in self._samples:
             yield self[samp]
 
