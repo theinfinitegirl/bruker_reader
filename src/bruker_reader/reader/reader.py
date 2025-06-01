@@ -1,3 +1,4 @@
+from __future__ import annotations  # Support '|' in typing
 import os.path
 from glob import glob
 from struct import Struct
@@ -126,6 +127,13 @@ def read_index_file(fname: str) -> dict[str, int]:
     return offsets
 
 
+def glob2(pattern: str, root_dir: str) -> list[str]:
+    # Replacement for python 3.10 glob in python 3.8
+    pattern = os.path.join(root_dir, pattern)
+    results = glob(pattern)
+    return [os.path.basename(f) for f in results]
+
+
 def read_extra_file(fname: str) -> Calibration:
     vecs = read_vectors(fname)
     for vec in vecs:
@@ -164,7 +172,7 @@ class BAFReader:
         file in order to be parsed by this reader.
         """
         self.dirname: str = dotd_dir
-        dat_file = glob("*.baf", root_dir=self.dirname)
+        dat_file = glob2("*.baf", root_dir=self.dirname)
         if len(dat_file) == 0:
             raise FileNotFoundError("Data (.baf) file not found in directory.")
         self.dat_file = os.path.join(dotd_dir, dat_file[0])
@@ -276,7 +284,7 @@ class BAFCache:
     """
     def __init__(self, root_dir: str):
         self.root_dir = root_dir
-        baf_files = glob("*.d", root_dir=root_dir)
+        baf_files = glob2("*.d", root_dir=root_dir)
         self._sample_lookup = {os.path.splitext(f)[0]:
                                os.path.join(root_dir, f)
                                for f in baf_files}
