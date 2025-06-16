@@ -192,8 +192,10 @@ class BAFReader:
 
     def mass2index(self, mass: float) -> np.ndarray:
         c = self.calibration
-        scaled = c.freq_hi / (mass - c.alpha / c.freq_hi)
-        return c.size * (c.freq_wid - scaled) / c.freq_wid
+        # Derived from solving index2mass for mass.
+        # More accurate than the 'rtms' solution
+        k = ((c.freq_hi / (mass - c.alpha/c.freq_hi)) + c.beta)/c.freq_wid
+        return c.size - c.size * k
 
     def index2mass(self, idx: int | np.ndarray) -> np.ndarray:
         c = self.calibration
